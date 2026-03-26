@@ -25,10 +25,10 @@ export default hopeTheme({
   locales: {
     "/": {
       // 导航栏
-      navbar: enNavbar,
+      navbar: zhNavbar,
 
       // 侧边栏
-      sidebar: enSidebarConfig,
+      sidebar: zhSidebarConfig,
 
       // 页脚
       footer: "",
@@ -36,18 +36,18 @@ export default hopeTheme({
 
       // Page meta
       metaLocales: {
-        editLink: "Edit this page on GitHub",
+        editLink: "在 GitHub 上编辑此页",
       },
     },
-    "/zh-CN/": {
+    "/en/": {
       // 导航栏
-      navbar: zhNavbar,
+      navbar: enNavbar,
 
-      sidebar: zhSidebarConfig,
+      sidebar: enSidebarConfig,
 
       // Page meta
       metaLocales: {
-        editLink: "在 GitHub 上编辑此页",
+        editLink: "Edit this page on GitHub",
       },
     },
   },
@@ -131,9 +131,9 @@ export default hopeTheme({
     comment: {
       provider: "Giscus",
       repo: "jaronnie/0xroad",
-      repoId: "R_kgDOLq1_9Q",
+      repoId: "R_kgDORxBD1w",
       category: "Announcements",
-      categoryId: "DIC_kwDOLq1_9c4Cf5lp",
+      categoryId: "DIC_kwDORxBD184C5TY4",
     },
     components: {
       components: ["Badge", "VPCard"],

@@ -7,12 +7,12 @@ export default defineUserConfig({
 
   locales: {
     "/": {
-      lang: "en-US",
+      lang: "zh-CN",
       title: "0xroad",
       description: "The road to 0x world",
     },
-    "/zh-CN/": {
-      lang: "zh-CN",
+    "/en/": {
+      lang: "en-US",
       title: "0xroad",
       description: "The road to 0x world",
     },
