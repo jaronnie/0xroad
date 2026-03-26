@@ -2,7 +2,7 @@
   "name": "0xroad",
   "version": "1.0.0",
   "description": "The road to 0x world",
-  "license": "UnLicense",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "docs:build": "vuepress-vite build src",
