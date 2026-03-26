@@ -23,10 +23,35 @@ export const zhSidebarConfig = sidebar({
         {
             text: "Uniswap",
             icon: "/uniswap-v2.svg",
-            prefix: "Uniswap/",
-            children: "structure",
             collapsible: true,
+            prefix: "Uniswap/",
             expanded: true,
+            children: [
+                {
+                    text: "V2",
+                    icon: "/uniswap-v2.svg",
+                    prefix: "V2/",
+                    children: "structure",
+                    collapsible: true,
+                    expanded: false,
+                },
+                {
+                    text: "V3",
+                    icon: "/uniswap-v3.svg",
+                    prefix: "V3/",
+                    children: "structure",
+                    collapsible: true,
+                    expanded: false,
+                },
+                {
+                    text: "V4",
+                    prefix: "V4/",
+                    icon: "/uniswap-v3.svg",
+                    children: "structure",
+                    collapsible: true,
+                    expanded: false,
+                },
+            ],
         },
     ]
 });
