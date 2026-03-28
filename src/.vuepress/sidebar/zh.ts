@@ -53,5 +53,21 @@ export const zhSidebarConfig = sidebar({
                 },
             ],
         },
+        {
+            text: "Solana",
+            icon: "/Solana.svg",
+            prefix: "Solana/",
+            children: "structure",
+            collapsible: true,
+            expanded: true,
+        },
+        {
+            text: "Chainlink",
+            icon: "/ChainLink.svg",
+            prefix: "chainlink/",
+            children: "structure",
+            collapsible: true,
+            expanded: true,
+        },
     ]
 });
