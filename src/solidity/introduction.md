@@ -10,16 +10,22 @@ order: 1
 
 Solidity 是一种用于编写以太坊虚拟机（EVM）智能合约的编程语言。
 
-## hello world
+使用 [Remix](https://remix.ethereum.org) 运行 Solidity 合约。Remix 是以太坊官方推荐的智能合约集成开发环境（IDE），适合新手，可以在浏览器中快速开发和部署合约，无需在本地安装任何程序。
+
+## Counter
+
+> 每调用一次 add 函数, 让 number 值 +1
 
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
-contract HelloWeb3{
-    string public _string = "Hello 0xroad!";
+contract Counter{
+    uint256 public number = 0;
+
+    function add() external{
+        number = number + 1;
+    }
 }
 ```
 
-使用 [Remix](https://remix.ethereum.org) 运行 Solidity 合约。Remix 是以太坊官方推荐的智能合约集成开发环境（IDE），适合新手，可以在浏览器中快速开发和部署合约，无需在本地安装任何程序。
-
-![](https://oss.jaronnie.com/image-20260328155807531.png)
+![](http://oss.jaronnie.com/image-20260328163651881.png)
