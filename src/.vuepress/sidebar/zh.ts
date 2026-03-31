@@ -69,5 +69,13 @@ export const zhSidebarConfig = sidebar({
             collapsible: true,
             expanded: true,
         },
+        {
+            text: "Code",
+            icon: "vscode-icons:file-type-codekit",
+            prefix: "code/",
+            children: "structure",
+            collapsible: true,
+            expanded: true,
+        },
     ]
 });
