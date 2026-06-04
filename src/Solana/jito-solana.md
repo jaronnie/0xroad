@@ -14,6 +14,10 @@ Jito-Solana 是 Jito 对 Solana validator 的一个 fork。它保留 Solana/Agav
 
 slot 是 Solana 的出块时间窗口；block 是这个 slot 中成功产生并被验证的实际区块数据。
 
+### epoch
+
+epoch 是 Solana 里的一个大时间周期，由很多个 slot 组成, 用来组织 leader 排班、stake 更新、奖励发放等周期性事务。
+
 ### bundle
 
 一组有顺序要求的交易包, 因为很多链上策略不是单笔交易能完成的，而是需要多笔交易配合，比如套利。
