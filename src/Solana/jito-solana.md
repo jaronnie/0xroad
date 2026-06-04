@@ -66,3 +66,18 @@ ReplayStage 验证和执行
 ```
 
 shred 就是 Solana 为了快速传播区块，把 block/entries 切出来的网络数据片。
+
+Solana shred 主要分两类：
+
+```shell
+Data Shred   = 真实 block 数据
+Coding Shred = 纠删码恢复数据
+```
+
+Data Shred:
+
+Data shred 包含 entries 序列的一部分。最终恢复 block 时，validator 需要连续 data shreds 才能重组 entries。
+
+Coding Shred:
+
+Coding shred 不包含新的 ledger 内容，而是基于一组 data shreds 生成的纠删码数据。它用于在部分 data shred 丢失时恢复缺失数据。
