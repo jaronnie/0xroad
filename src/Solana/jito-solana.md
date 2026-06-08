@@ -359,7 +359,6 @@ Pass a command to run something else after the CI dependencies are installed:
   scripts/cargo-docker-build.sh -- scripts/cargo-clippy-nightly.sh
 
 Options:
-  --shell        Open an interactive shell after installing dependencies
   --image IMAGE Docker image to use (default: docker.io/rust:1-alpine3.22)
   -h, --help     Show this help
 EOF
@@ -417,7 +416,6 @@ source .github/scripts/install-all-deps.sh Linux
 source ci/rust-version.sh nightly
 rustup component add clippy --toolchain "$rust_nightly"
 
-exec bash
 
 if [[ $# -eq 0 ]]; then
   exec scripts/cargo-clippy-nightly.sh
@@ -432,10 +430,11 @@ set -eu
 apk update
 apk add bash git
 
-exec bash -c "$CONTAINER_SCRIPT" bash "$@"
+bash -c "$CONTAINER_SCRIPT" bash "$@"
 '
 
 docker_args=(
+  -it
   --workdir /solana
   --volume "$repo_root:/solana"
   --env CONTAINER_SCRIPT="$container_script"
@@ -446,10 +445,6 @@ docker_args=(
   --env HOST_UID="$host_uid"
   --env HOST_GID="$host_gid"
 )
-
-if [[ -t 0 && -t 1 ]]; then
-  docker_args+=(--interactive --tty)
-fi
 
 exec docker run "${docker_args[@]}" "$image" sh -c "$bootstrap_script" sh "$@"
 ```
