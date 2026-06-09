@@ -156,6 +156,108 @@ Solana ledger 是 validator 持久化保存的链上历史数据。
 
 validator 并不是只保存一个最终状态，它还需要保存足够的历史数据来证明和重放这个状态是怎么来的。
 
+### Solana gossip：节点发现和集群信息传播
+
+Gossip 是 Solana validator 之间用来发现彼此、交换节点元数据和维护集群视图的网络协议。
+
+它不是交易执行路径，也不是 block 传播路径。它更像是 Solana 集群的“通讯录”和“状态广播层”：每个节点通过 gossip 知道网络里有哪些节点、这些节点的地址是什么、提供哪些服务端口、当前 shred version 是什么，以及一些和集群运行相关的元信息。
+
+可以粗略理解成：
+
+```shell
+Validator A
+  宣布自己的身份、公钥、IP、端口、版本等信息
+  ↓ gossip
+Validator B / C / D
+  收到后更新本地集群视图
+  ↓ gossip
+更多 validators 继续传播这些信息
+```
+
+#### Gossip 传播什么
+
+Solana gossip 传播的是集群元数据，不是完整 block 数据。
+
+常见信息包括：
+
+- 节点身份：validator 的 identity pubkey。
+- ContactInfo：节点对外暴露的网络地址和端口，例如 gossip、TPU、TVU、repair、RPC 等。
+- shred version：用于区分当前网络和 ledger 兼容性，避免错误网络的数据混在一起。
+- 节点版本和 feature 信息：帮助其他节点理解对方运行的客户端能力。
+- vote 相关信息：validator 的投票身份、投票账户等元数据。
+- snapshot、repair、serve repair 等服务入口：帮助新节点或落后节点同步和修复数据。
+
+这些信息通常会被组织在 CRDS 中，也就是 Cluster Replicated Data Store。可以把 CRDS 理解成每个节点本地维护的一份“集群成员和元数据表”，gossip 负责让这张表在网络中不断扩散和收敛。
+
+#### Gossip 不传播什么
+
+Gossip 容易和 Turbine、TPU、TVU 混在一起，但它们负责的层不同。
+
+Gossip 不负责：
+
+- 把用户交易直接送进 leader 执行。
+- 把 leader 产出的 shreds 高速广播给全网。
+- replay ledger 或验证交易执行结果。
+- 决定 MEV bundle 如何排序。
+
+这些事情分别由其他组件负责：
+
+```shell
+Gossip  = 节点发现、地址和集群元数据传播
+TPU     = leader 接收交易、执行交易、产出 block
+Turbine = leader 把 shreds 扩散给 validators
+TVU     = validator 接收 shreds、重组 block、replay 验证
+```
+
+#### Gossip 和 TPU / TVU 的关系
+
+TPU 和 TVU 要正常工作，首先需要知道其他节点在哪里。
+
+Gossip 提供的 ContactInfo 会告诉 validator：
+
+- 某个 leader 的 TPU 地址在哪里，可以把交易转发过去。
+- 某个 validator 的 TVU、repair 地址在哪里，可以接收或请求区块数据。
+- 当前网络中的可见节点集合是什么。
+- 节点是否属于同一个 shred version 的网络。
+
+所以，gossip 更偏控制面，TPU、TVU、Turbine 更偏数据面。
+
+```shell
+控制面:
+Gossip 传播节点身份、地址、版本和服务入口
+
+数据面:
+TPU 传交易
+Turbine 传 shreds
+TVU 收 shreds 并 replay
+```
+
+#### Gossip 的传播方式
+
+Gossip 的设计目标不是让每条元信息都瞬间到达所有节点，而是通过节点之间不断交换信息，让集群视图逐渐收敛。
+
+一个节点会周期性地选择一些 peer 交换自己知道的 CRDS 数据。其他节点收到后，会根据时间戳、签名和版本等信息判断是否接受、更新或丢弃。
+
+这类传播方式的特点是：
+
+- 扩散性强：不需要中心节点维护完整网络目录。
+- 最终收敛：短时间内不同节点看到的集群视图可能不同，但会逐渐一致。
+- 抗节点上下线：节点加入、退出、换地址时，可以通过 gossip 被其他节点感知。
+- 适合元数据：适合传播节点地址和状态，不适合承载高吞吐 block 数据。
+
+#### 为什么 gossip 对 Jito-Solana 也重要
+
+Jito-Solana 主要增强的是交易进入 leader 的路径，例如 bundle、tip、Block Engine、BAM 等。但它仍然是一个 Solana validator，仍然需要依赖 gossip 参与集群网络。
+
+对 Jito-Solana 来说，gossip 至少有几个作用：
+
+- 发现其他 validators 和当前集群成员。
+- 获取 leader、TPU、TVU、repair 等网络入口信息。
+- 确认 shred version，避免接入错误网络。
+- 支持节点同步、repair、replay 等基础流程。
+
+但 gossip 本身不决定 Jito bundle 是否被打包，也不负责 BAM 的交易排序。Jito 和 BAM 优化的是出块前的交易入口和排序；gossip 维护的是 validator 在 Solana 网络中的基础连通性和集群视图。
+
 ### TPU 和 TVU：validator 的入口与验证流水线
 
 理解 Jito-Solana 时，经常会看到 TPU、TVU 这两个词。它们都不是某种新的共识机制，而是 Solana validator 内部处理数据的两条关键流水线。
@@ -568,6 +670,7 @@ BAM 出现后，可以把 Jito-Solana 的演进理解成两层：
 6. validators 收集 shreds，重组 ledger，并 replay 验证状态。
 7. Jito-Solana 在 leader 接收交易的路径上增加 bundle、tip 和 MEV 相关能力。
 8. BAM 在这个基础上把交易调度和排序进一步外置到 BAM Node，并通过 TEE、可验证排序和插件增强 block building。
+9. Gossip 负责节点发现和集群元数据传播，为 TPU、TVU、Turbine 等数据路径提供基础网络视图。
 
 所以，Jito-Solana 的核心不是改变 Solana 的共识模型，而是改进高价值交易如何进入 leader、如何排序、以及收益如何分配。
 
