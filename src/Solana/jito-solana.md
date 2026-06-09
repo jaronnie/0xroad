@@ -380,6 +380,131 @@ Validator 最终负责执行交易、投票、出块并维护网络共识。
 
 当某个 Jito-Solana validator 成为当前 slot 的 leader 时，它可以接收来自 Jito 交易流的 bundle，并把符合条件的交易打进自己生产的 block。
 
+#### BAM
+
+BAM 通常指 Jito 的 Block Assembly Marketplace，是面向 Solana 的新一代交易调度和组块架构。
+
+如果说传统 Jito Block Engine 更像是“把 bundle 和高价值交易更高效地送到 leader”，那么 BAM 更进一步：它把交易排序这件事从 validator 本地内部逻辑中抽出来，交给专门的 BAM Node 调度，然后再把已经排好序的交易流发送给即将出块的 BAM Validator 执行。
+
+可以粗略理解成：
+
+```shell
+用户交易 / searcher bundle / Jito Block Engine 流
+  ↓
+BAM Node
+  接收交易和 bundle
+  验证交易有效性
+  根据规则和插件排序
+  在 TEE 中保护交易隐私
+  生成可验证的排序结果
+  ↓
+BAM Validator / Leader
+  接收排好序的交易流
+  按顺序执行交易
+  生成 entries
+  切成 shreds 广播
+  ↓
+其他 validators
+  TVU 接收 shreds
+  replay 验证
+```
+
+BAM 的关键点有几个：
+
+- 外部调度：BAM Node 负责接收、验证、排序交易和 bundle。
+- Validator 仍然出块：BAM Validator 仍然负责执行交易、生产 block、广播 shreds 和参与共识。
+- TEE：BAM Node 可以在可信执行环境中调度交易，降低交易在进入执行前被窥探的风险。
+- 可验证排序：BAM 通过签名和证明让交易排序过程更容易审计。
+- 插件：开发者可以通过插件表达更定制化的排序规则，例如特定应用的公平排序、优先级逻辑或 MEV 保护策略。
+
+所以，BAM 不是一条新链，也不是替代 Solana 共识。它改变的是 leader 生产 block 之前“交易如何被调度和排序”的市场结构。
+
+#### BAM Node
+
+BAM Node 是 BAM 架构里的外部调度节点。
+
+它会接收普通交易、bundle、Solana cluster state 和当前 leader 信息，然后做交易有效性检查、排序、调度，并把交易流发送给连接的 BAM Validator。
+
+一个 BAM Node 可以服务多个 BAM Validators。它更像是一个专业化的 transaction scheduler，而不是负责投票和共识的 validator。
+
+#### BAM Validator
+
+BAM Validator 是连接到 BAM Node 的 Jito-Solana validator。
+
+它的核心职责仍然是 validator 的职责：执行交易、生成 block、广播 shreds、投票和维护共识。区别在于，当它接入 BAM 后，leader slot 中的交易流会从 BAM Node 过来，并按 BAM Node 给出的顺序执行。
+
+需要注意：
+
+- BAM Validator 一次通常只连接一个 BAM Node。
+- Validator 仍然拥有最终的 block production 职责。
+- BAM 不直接影响 TVU 验证别人 block 的基本流程。
+- 如果交易最终被执行并产出 block，后续仍然要进入 shred 传播、Blockstore 重组和 ReplayStage 验证。
+
+#### BAM 和 TPU 的关系
+
+前面说过，TPU 是 leader 接收交易并出块的入口侧。BAM 可以理解为对 TPU 入口侧交易调度能力的进一步外置和增强。
+
+普通 Jito-Solana 的路径更像是：
+
+```shell
+交易 / bundle
+  ↓
+Jito Block Engine / relayer
+  ↓
+Leader TPU
+  ↓
+本地排序和执行
+```
+
+接入 BAM 后，路径更像是：
+
+```shell
+交易 / bundle
+  ↓
+BAM Node 外部调度
+  ↓
+BAM Validator / Leader
+  ↓
+按调度结果执行
+```
+
+官方文档里也强调：当 validator 接入 BAM 且即将成为 leader 时，通过 RPC 或直接发到 TPU 的交易也会经过 BAM 处理后再执行。
+
+因此，BAM 关注的仍然是出块前的交易入口和排序，不改变 block 产出后的传播与验证路径。
+
+#### BAM、Block Engine、Bundle 的关系
+
+BAM 不等于 bundle，也不只是 Block Engine 的另一个名字。
+
+可以这样区分：
+
+```shell
+bundle       = 一组有顺序要求的交易
+Block Engine = Jito 现有的交易 / bundle 转发和预模拟基础设施
+BAM Node     = 更通用的外部交易调度和排序节点
+BAM Validator = 接收 BAM Node 交易流并负责出块的 validator
+```
+
+BAM 可以继续兼容 Jito bundles。也就是说，bundle 仍然是 searcher 表达复杂交易意图的一种方式，而 BAM 是更上层的排序和组块市场架构。
+
+#### BAM 的意义
+
+BAM 想解决的是 Solana block building 中更深一层的问题：谁来排序、排序是否可验证、应用能不能表达自己的排序规则、交易在执行前是否能减少被窥探。
+
+它带来的变化可以概括为：
+
+- 从单纯的低延迟交易转发，走向可编程交易调度。
+- 从 validator 本地排序，走向外部专业调度节点和 validator 协作。
+- 从黑盒排序，走向带签名和证明的可审计排序。
+- 从通用排序规则，走向应用可以通过插件定制执行逻辑。
+
+但它也有边界：
+
+- BAM 不改变 Solana 的 slot、PoH、shred、replay 和投票模型。
+- BAM 不保证某笔交易一定成功，只是改变交易进入 leader 和被排序的方式。
+- TEE 降低交易供应链中的窥探风险，但不等于消除所有 MEV。
+- 交易执行后的状态仍然由 Solana validator replay 和共识流程决定。
+
 ### 角色关系
 
 Searcher、Builder、Validator 的关系可以这样理解：
@@ -421,7 +546,15 @@ Jito-Solana 不是一条新链，而是 Solana validator 的增强版本。
 
 Jito-Solana:
 用户交易 / Searcher bundle → Jito 交易流 → Jito-Solana Leader → Block
+
+Jito-Solana + BAM:
+用户交易 / Searcher bundle → BAM Node 调度排序 → BAM Validator Leader → Block
 ```
+
+BAM 出现后，可以把 Jito-Solana 的演进理解成两层：
+
+- Jito-Solana 增强 validator 的交易入口和 MEV 交易流能力。
+- BAM 把交易调度和排序进一步模块化，让外部 BAM Node、TEE、插件和 validator 形成协作。
 
 ### 总结
 
@@ -434,8 +567,11 @@ Jito-Solana:
 5. entries 被切成 shreds 在网络中传播。
 6. validators 收集 shreds，重组 ledger，并 replay 验证状态。
 7. Jito-Solana 在 leader 接收交易的路径上增加 bundle、tip 和 MEV 相关能力。
+8. BAM 在这个基础上把交易调度和排序进一步外置到 BAM Node，并通过 TEE、可验证排序和插件增强 block building。
 
 所以，Jito-Solana 的核心不是改变 Solana 的共识模型，而是改进高价值交易如何进入 leader、如何排序、以及收益如何分配。
+
+BAM 的核心也不是改变共识，而是让出块前的交易调度更隐私、更可验证、更可编程。
 
 ## 编译 jito-solana
 
