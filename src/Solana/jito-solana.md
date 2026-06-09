@@ -156,6 +156,108 @@ Solana ledger 是 validator 持久化保存的链上历史数据。
 
 validator 并不是只保存一个最终状态，它还需要保存足够的历史数据来证明和重放这个状态是怎么来的。
 
+### TPU 和 TVU：validator 的入口与验证流水线
+
+理解 Jito-Solana 时，经常会看到 TPU、TVU 这两个词。它们都不是某种新的共识机制，而是 Solana validator 内部处理数据的两条关键流水线。
+
+可以先用一句话区分：
+
+```shell
+TPU = Transaction Processing Unit，leader 用来接收、转发、执行交易并出块
+TVU = Transaction Validation Unit，validator 用来接收 shreds、重组 block、replay 验证
+```
+
+#### TPU
+
+TPU 是交易进入当前 leader 的主要入口。
+
+当一个 validator 是当前 slot 的 leader 时，它会通过 TPU 接收来自 RPC、其他节点转发、Jito 交易流等来源的交易，然后完成筛选、排序、执行、生成 entries，并最终把 entries 切成 shreds 广播出去。
+
+可以粗略理解成：
+
+```shell
+用户 / RPC / searcher
+  ↓
+交易发送到 leader TPU
+  ↓
+TPU 接收、过滤、转发、排序
+  ↓
+BankingStage 执行交易
+  ↓
+PoH 记录交易顺序
+  ↓
+生成 entries
+  ↓
+切成 shreds
+  ↓
+广播给其他 validators
+```
+
+TPU 侧关注的是“交易如何尽快进入 leader 并被打包”。所以在 Jito-Solana 里，bundle、tip、block engine / relayer 这些能力，本质上都是围绕 leader 的交易入口和排序选择展开的。
+
+#### TVU
+
+TVU 是 validator 接收和验证区块数据的流水线。
+
+当其他 leader 正在出块时，普通 validator 会通过网络收到这个 leader 广播出来的 shreds。TVU 负责接收这些 shreds，校验、去重、写入 blockstore，等待数据完整后重组 entries，再交给 replay 逻辑执行和验证。
+
+可以粗略理解成：
+
+```shell
+Leader 广播 shreds
+  ↓
+Validator TVU 接收 shreds
+  ↓
+校验签名、slot、索引和完整性
+  ↓
+写入 Blockstore
+  ↓
+重组 entries
+  ↓
+ReplayStage 重放交易
+  ↓
+验证状态并投票
+```
+
+TVU 侧关注的是“别人出的 block 是否能被我及时收到、重组、验证并参与投票”。它不负责决定当前 leader 要把哪些新交易打进 block，而是负责验证已经由 leader 产出的 ledger 数据。
+
+#### TPU 和 TVU 的关系
+
+同一个 validator 在不同 slot 中会扮演不同角色：
+
+- 轮到自己当 leader 时，TPU 更关键：它要尽快接收交易、执行交易并产出 shreds。
+- 没轮到自己当 leader 时，TVU 更关键：它要尽快接收别人的 shreds、重组 block 并 replay。
+- 一个 validator 通常同时维护这些组件，因为它既要准备未来自己的 leader slot，也要持续验证其他 leader 的 block。
+
+用一张图串起来：
+
+```shell
+当前 leader
+  TPU 接收交易
+  ↓
+执行交易 + PoH 排序
+  ↓
+entries → shreds
+  ↓ Turbine
+其他 validators
+  TVU 接收 shreds
+  ↓
+Blockstore 重组
+  ↓
+ReplayStage 验证
+  ↓
+投票 / 更新状态
+```
+
+因此，TPU 和 TVU 不是互相替代的概念，而是 Solana 高性能流水线的两侧：
+
+```shell
+TPU 偏生产：交易进入 leader，形成 block
+TVU 偏消费：接收 shreds，验证和重放 block
+```
+
+理解这一点后，再看 Jito-Solana 会更清楚：Jito 主要优化的是高价值交易、bundle 和 tip 如何进入 leader 并参与排序，也就是偏 TPU 入口侧；而 block 一旦被产出，仍然要通过 shred 传播、TVU 接收、ReplayStage 验证，并接受 Solana 原有共识流程的约束。
+
 ### shred：Solana 的区块传播单位
 
 leader 不会把一个完整 block 一次性发给所有 validators。
