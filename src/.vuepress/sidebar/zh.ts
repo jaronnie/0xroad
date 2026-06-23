@@ -5,6 +5,14 @@ export const zhSidebarConfig = sidebar({
     "/": [
         "",
         {
+            text: "Ethereum",
+            icon: "token-branded:ethereum",
+            prefix: "ethereum/",
+            children: "structure",
+            collapsible: true,
+            expanded: true,
+        },
+        {
             text: "Solidity",
             icon: "/solidity.svg",
             prefix: "solidity/",
